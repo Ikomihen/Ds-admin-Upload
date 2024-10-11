@@ -8,7 +8,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-storage-compat.js"></script>
     <style>
-        :root {
+             :root {
             --primary-color: #4a90e2;
             --secondary-color: #f39c12;
             --background-color: #f4f4f4;
@@ -141,6 +141,19 @@
             border-radius: 5px;
             display: none;
         }
+        
+        .price-slider {
+            width: 100%;
+            margin: 20px 0;
+        }
+        .price-slider input {
+            width: 100%;
+        }
+        .price-display {
+            text-align: center;
+            font-size: 1.2em;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -152,14 +165,15 @@
             <h2>Product Upload</h2>
             <input type="file" id="imageUpload" accept="image/*" multiple>
             <div id="imagePreview"></div>
-            <input type="text" id="productName" placeholder="Product Name">
-            
-  
-            
+            <div class="price-slider">
+                <input type="range" id="priceSlider" min="0" max="1000" step="1" value="500">
+                <div class="price-display">Price: $<span id="priceDisplay">500</span></div>
+            </div>
+            <input type="number" id="productQuantity" placeholder="Quantity">
             <input type="text" id="securityCode" placeholder="Security Code">
-            <button onclick="uploadProduct()">Upload Product</button>
-            </br>
-              <button onclick="uploadProductss()"><a style ="color:white" href="lo.html">View Listing</a></button>
+            <button onclick="uploadProduct()">Upload Product</button> 
+            </br>  <button><a href="lo.html" >Product Listing</a></button>
+            
             <div id="spinner" class="spinner"></div>
         </div>
         <div id="products" class="products"></div>
@@ -167,7 +181,7 @@
     <div id="notification" class="notification"></div>
 
     <script>
-        // Initialize Firebase
+        // Initialize Firebase (keep your existing configuration)
         const firebaseConfig = {
             apiKey: "AIzaSyD0ohfy9u-CDt9K7ZDX-UUbzNCbCRhL7TY",
             authDomain: "credentials-a17e3.firebaseapp.com",
@@ -183,7 +197,15 @@
         const db = firebase.firestore();
         const storage = firebase.storage();
 
-        // Image preview functionality
+        // Price slider functionality
+        const priceSlider = document.getElementById('priceSlider');
+        const priceDisplay = document.getElementById('priceDisplay');
+
+        priceSlider.addEventListener('input', function() {
+            priceDisplay.textContent = this.value;
+        });
+
+        // Image preview functionality (keep as is)
         document.getElementById('imageUpload').addEventListener('change', function(event) {
             const imagePreview = document.getElementById('imagePreview');
             imagePreview.innerHTML = '';
@@ -222,60 +244,52 @@
                 alert('Incorrect security code. Upload not allowed.');
                 return;
             }
-            function uploadProductss() {
-            window.location.href = "lo.html"
-            }
 
             const files = document.getElementById('imageUpload').files;
-            const name = document.getElementById('productName').value;
-            const brand = document.getElementById('productBrand').value;
-            const price = parseFloat(document.getElementById('productPrice').value);
+            const price = parseFloat(document.getElementById('priceSlider').value);
             const quantity = parseInt(document.getElementById('productQuantity').value);
 
-            if (files.length === 0 || !name || !brand || isNaN(price) || isNaN(quantity)) {
+            if (files.length === 0 || isNaN(price) || isNaN(quantity)) {
                 alert('Please fill in all fields correctly and select at least one image.');
                 return;
             }
 
             showSpinner();
 
+            // Upload images to Firebase Storage
             const uploadPromises = Array.from(files).map(file => {
                 const storageRef = storage.ref('products/' + file.name);
                 return storageRef.put(file).then(snapshot => snapshot.ref.getDownloadURL());
             });
 
-            Promise.all(uploadPromises).then(downloadURLs => {
-                db.collection("products").add({
-                    name: name,
-                    brand: brand,
+            Promise.all(uploadPromises).then(imageUrls => {
+                // Store price and image URLs in Firestore
+                return db.collection("products").add({
                     price: price,
                     quantity: quantity,
-                    imageUrls: downloadURLs
-                })
-                .then(() => {
-                    hideSpinner();
-                    showNotification('Product uploaded successfully!');
-                    loadProducts();
-                    // Clear form fields and image preview
-                    document.getElementById('productName').value = '';
-                    document.getElementById('productBrand').value = '';
-                    document.getElementById('productPrice').value = '';
-                    document.getElementById('productQuantity').value = '';
-                    document.getElementById('securityCode').value = '';
-                    document.getElementById('imageUpload').value = '';
-                    document.getElementById('imagePreview').innerHTML = '';
-                })
-                .catch((error) => {
-                    hideSpinner();
-                    console.error("Error adding document: ", error);
-                    showNotification('Error uploading product. Please try again.');
+                    imageUrls: imageUrls
                 });
+            }).then(() => {
+                hideSpinner();
+                showNotification('Product uploaded successfully!');
+                loadProducts();
+                // Clear form fields and image preview
+                document.getElementById('priceSlider').value = '500';
+                document.getElementById('priceDisplay').textContent = '500';
+                document.getElementById('productQuantity').value = '';
+                document.getElementById('securityCode').value = '';
+                document.getElementById('imageUpload').value = '';
+                document.getElementById('imagePreview').innerHTML = '';
+            }).catch((error) => {
+                hideSpinner();
+                console.error("DS Studio: Please Check Product Listing", error);
+                showNotification('DS Studio: Please Check Product Listing');
             });
         }
 
         function loadProducts() {
-            const productsDiv = document.getElementById('products');
-            productsDiv.innerHTML = ''; // Clear existing products
+            const productsContainer = document.getElementById('products');
+            productsContainer.innerHTML = '';
 
             db.collection("products").get().then((querySnapshot) => {
                 querySnapshot.forEach((doc) => {
@@ -283,19 +297,24 @@
                     const productElement = document.createElement('div');
                     productElement.className = 'product';
                     productElement.innerHTML = `
-                        <img src="${product.imageUrls[0]}" alt="${product.name}">
-                        <h3>${product.name}</h3>
-                        <p>Brand: ${product.brand}</p>
-                        <p class="price">Price: $${product.price.toFixed(2)}</p>
-                        <p>Available: ${product.quantity}</p>
+                        <img src="${product.imageUrls[0]}" alt="Product Image">
+                        <p class="price">$${product.price}</p>
+                        <p>Quantity: ${product.quantity}</p>
                     `;
-                    productsDiv.appendChild(productElement);
+                    productsContainer.appendChild(productElement);
                 });
             });
         }
 
         // Load products on page load
         loadProducts();
+
+        // Set up real-time listener for product updates
+        db.collection("products").onSnapshot((snapshot) => {
+            loadProducts();
+        }, (error) => {
+            console.error("Error setting up real-time listener: ", error);
+        });
     </script>
 </body>
 </html>
